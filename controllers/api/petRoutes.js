@@ -1,6 +1,9 @@
 const router = require('express').Router();
 
-const {Pet, Condition} = require('../../models');
+const {User, Pet, Action} = require('../../models');
+const {Effect, Condition} = require('../../conditioning');
+
+const FEED = 'feed';
 
 /*
 
@@ -16,7 +19,9 @@ router.get('/:user_id', async (req,res) => {
       if ( pet === null ) {
         pet = await Pet.create(Pet.generateNewPet(req.params.user_id));
       }
-      res.status(200).json(pet);
+      Condition.current(pet).then(currentPet => {
+        res.status(200).json(currentPet);
+      });
     } catch (err) {
         console.log(err);
         res.status(500).json(err);
@@ -31,10 +36,39 @@ Body:
     type: INTEGER
     quantity: INTEGER
   }
-Returns: your current Pet object (updated based on the attention)
+Returns:
 
-< This is a dispatch for lots of possible ways to give your Pet attention>
+200 - attention received
+400 - invalid attention
+500 - something went wrong
 
 */
+router.post('/:pet_id/:attention/:amount', async (req,res) => {
+  try {
+    let pet = await Pet.findOne({
+       where: { id: req.params.pet_id }
+      });
+    if ( pet === null ) {
+      res.status(404).json("Cannot find pet with id " + req.params.pet_id);
+    }
+    let success = false;
+    switch(req.params.attention) {
+      case FEED:
+        success = await Effect.feed(pet);
+        break;
+      default: {
+        res.status(400).json("Unknown attention " + req.params.attention + " given.");
+      }
+    }
+    if (success) {
+      res.status(200).json("Attention " + req.params.attention + " successfully given.");
+    } else {
+      res.status(500).json("Attention " + req.params.attention + " did not complete successfully.");
+    }
+  } catch (err) {
+      console.log(err);
+      res.status(500).json(err);
+  }
+});
 
 module.exports = router;
